@@ -2,7 +2,7 @@ import React from 'react';
 import { UserProfile, ConversationTopic, Partner } from '../types';
 import { CONVERSATION_TOPICS } from '../data/topics';
 import { MOCK_PARTNERS } from '../data/mockPartners';
-import { Video, Clock, ShieldCheck, ArrowRight, UserCheck } from 'lucide-react';
+import { Video, ShieldCheck, ArrowRight, UserPlus, Clock } from 'lucide-react';
 
 interface HeroLobbyProps {
   user: UserProfile;
@@ -10,9 +10,8 @@ interface HeroLobbyProps {
   onSelectTopic: (topic: ConversationTopic | null) => void;
   onStartMatching: () => void;
   onConnectDirectWithPartner: (partner: Partner) => void;
-  onOpenPricing: () => void;
   onOpenAuth: () => void;
-  onOpenInstall: () => void;
+  onOpenProfile: () => void;
   onToggleUserAvailability: () => void;
 }
 
@@ -22,66 +21,68 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
   onSelectTopic,
   onStartMatching,
   onConnectDirectWithPartner,
-  onOpenPricing,
   onOpenAuth,
-  onOpenInstall,
+  onOpenProfile,
   onToggleUserAvailability
 }) => {
-  const isPassActive = user.unlimitedPassExpiresAt && user.unlimitedPassExpiresAt > Date.now();
-  const freeRemaining = Math.max(0, 15 - user.sessionsCompletedToday);
-  const canStart = isPassActive || freeRemaining > 0;
-
   return (
     <div className="space-y-12 pb-16">
-      {/* Main Section */}
+      {/* Main Hero Section */}
       <section className="bg-stone-100/70 border-b border-stone-200 py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left Column */}
             <div className="lg:col-span-7 space-y-5">
-              <span className="text-xs font-semibold text-stone-600 block">
-                Worldwide 1-on-1 English Practice
-              </span>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-200/80 text-stone-800 rounded-full text-xs font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5 text-stone-700" />
+                <span>100% Free 1-on-1 English Conversation</span>
+              </div>
 
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 tracking-tight leading-tight">
                 Practice conversational English with people worldwide.
               </h1>
 
               <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-xl">
-                Everyone can practice for free up to 15 times every day. Each call is a private, ten-minute one-on-one video session with conversation questions to keep dialogue natural.
+                Every session is a private, ten-minute video call with a friendly partner. Free for everyone worldwide, with curated conversation questions so you always have something to say.
               </p>
 
-              {/* Primary Actions & Daily Counter */}
+              {/* Action Buttons */}
               <div className="pt-2 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={onStartMatching}
-                    disabled={!canStart}
-                    className="px-7 py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                    className="px-7 py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <Video className="w-4 h-4" />
-                    <span>Join Anyone Free Right Now</span>
+                    <span>Start 1-on-1 Call (Free)</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
-                  <button
-                    onClick={onOpenPricing}
-                    className="px-5 py-3.5 bg-white hover:bg-stone-50 border border-stone-300 text-stone-800 font-semibold text-xs sm:text-sm rounded-xl transition-colors"
-                  >
-                    Unlimited Passes (From $5)
-                  </button>
+                  {!user.isLoggedIn ? (
+                    <button
+                      onClick={onOpenAuth}
+                      className="px-5 py-3.5 bg-white hover:bg-stone-50 border border-stone-300 text-stone-800 font-semibold text-xs sm:text-sm rounded-xl transition-colors flex items-center gap-1.5"
+                    >
+                      <UserPlus className="w-4 h-4 text-stone-600" />
+                      <span>Create Free Account</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onOpenProfile}
+                      className="px-5 py-3.5 bg-white hover:bg-stone-50 border border-stone-300 text-stone-800 font-semibold text-xs sm:text-sm rounded-xl transition-colors"
+                    >
+                      Your Profile ({user.country})
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-stone-600 pt-1">
-                  <span className="font-semibold text-stone-900">
-                    {isPassActive ? (
-                      <span className="text-emerald-800 font-bold">Unlimited Pass Active</span>
-                    ) : (
-                      <span>{freeRemaining} of 15 free daily sessions remaining today</span>
-                    )}
+                <div className="flex items-center gap-3 text-xs text-stone-500 pt-1">
+                  <span className="flex items-center gap-1 text-stone-700 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-stone-600" />
+                    <span>10-Minute Focused Calls</span>
                   </span>
                   <span>·</span>
-                  <span className="text-stone-500">Resets every 24 hours</span>
+                  <span>100% Free for all global members</span>
                 </div>
               </div>
 
@@ -104,7 +105,7 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
                   <span>
                     {user.isFreeNow
                       ? 'You are marked free to talk right now'
-                      : 'You are currently busy (click to mark free)'}
+                      : 'You are marked busy (click to mark free)'}
                   </span>
                 </button>
               </div>
@@ -172,7 +173,7 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
         </div>
       </section>
 
-      {/* Topics Section */}
+      {/* Conversation Topics */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
           <div>
@@ -234,12 +235,12 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
         </div>
       </section>
 
-      {/* Moderation Rules & 1-on-1 Safety Policy */}
+      {/* 1-on-1 Moderation Guidelines */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-stone-900 text-white rounded-2xl p-6 sm:p-8 space-y-4">
           <div className="flex items-center gap-2 text-xs font-semibold text-stone-300">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>1-on-1 Private Call Rules and Moderation</span>
+            <span>1-on-1 Call Guidelines</span>
           </div>
 
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
@@ -252,7 +253,7 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
                 1. Single Person on Camera
               </strong>
               <p>
-                If more than one person is detected in frame or in a noisy public space, the system issues a notice to move to a private room. If unresolved, the call ends automatically.
+                If more than one person is detected in frame or in a noisy public space, the system issues a notice to move to a private room.
               </p>
             </div>
 
@@ -261,16 +262,16 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
                 2. Respectful Conduct
               </strong>
               <p>
-                Harsh or abusive language, harassment, or inappropriate bodily exposure results in immediate, permanent account ban with zero tolerance.
+                Harsh or abusive language, harassment, or inappropriate bodily exposure results in immediate, permanent account ban.
               </p>
             </div>
 
             <div className="bg-stone-800 p-4 rounded-xl space-y-1.5 border border-stone-700">
               <strong className="text-white block text-sm">
-                3. Global Accounts
+                3. Global Community
               </strong>
               <p>
-                Learners from all 195+ countries worldwide join using verified accounts, creating a calm and dependable environment for regular speaking practice.
+                Learners from all 195+ countries worldwide join to practice daily English conversation in a friendly and respectful space.
               </p>
             </div>
           </div>

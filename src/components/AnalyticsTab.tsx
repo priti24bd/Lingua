@@ -6,7 +6,6 @@ interface AnalyticsTabProps {
   user: UserProfile;
   contacts: ContactRecord[];
   vocab: VocabularyWord[];
-  onOpenPricing: () => void;
 }
 
 export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({

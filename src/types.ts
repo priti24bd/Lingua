@@ -15,9 +15,9 @@ export interface UserProfile {
   totalSessions: number;
   totalMinutes: number;
   streakDays: number;
-  unlimitedPassExpiresAt: number | null; // timestamp if active
   isOfflineMode: boolean;
-  isFreeNow: boolean; // currently available and ready to speak right now
+  isFreeNow: boolean;
+  isLoggedIn: boolean;
 }
 
 export interface ConversationTopic {
@@ -75,42 +75,4 @@ export interface VocabularyWord {
   date: string;
 }
 
-export type PassType = '2_days' | '7_days' | '30_days';
-
-export interface PassOption {
-  id: PassType;
-  title: string;
-  days: number;
-  price: number;
-  badge?: string;
-  popular?: boolean;
-  description: string;
-}
-
 export type ModerationWarningStage = 'none' | 'warning_1_crowded' | 'warning_2_final' | 'terminated_crowd' | 'permanent_ban';
-
-// Transparent Merchant Payout System
-export interface PayoutSettings {
-  payoutMethod: 'bank_transfer' | 'stripe' | 'paypal';
-  accountHolderName: string;
-  bankName: string;
-  ibanOrAccountNumber: string;
-  swiftOrRouting: string;
-  stripeAccountId: string;
-  paypalEmail: string;
-  payoutSchedule: 'daily' | 'weekly' | 'monthly';
-  currency: string;
-}
-
-export interface PayoutTransaction {
-  id: string;
-  date: string;
-  buyerName: string;
-  passType: string;
-  grossAmount: number;
-  processingFee: number;
-  netPayout: number;
-  status: 'transferred' | 'scheduled' | 'processing';
-  payoutDestination: string;
-}
-

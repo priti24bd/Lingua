@@ -4,8 +4,7 @@ import {
   Partner,
   ConversationTopic,
   ContactRecord,
-  VocabularyWord,
-  PassType
+  VocabularyWord
 } from './types';
 import {
   getUser,
@@ -23,12 +22,10 @@ import { VideoRoom } from './components/VideoRoom';
 import { PostSessionModal } from './components/PostSessionModal';
 import { HistoryDashboard } from './components/HistoryDashboard';
 import { AnalyticsTab } from './components/AnalyticsTab';
-import { PricingModal } from './components/PricingModal';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
 import { InstallModal } from './components/InstallModal';
 import { DetectiveAlertModal } from './components/DetectiveAlertModal';
-import { PayoutSettingsModal } from './components/PayoutSettingsModal';
 import { WifiOff, ShieldCheck } from 'lucide-react';
 
 export default function App() {
@@ -38,7 +35,7 @@ export default function App() {
   const [vocab, setVocab] = useState<VocabularyWord[]>(getVocab());
 
   // Navigation Tab
-  const [currentTab, setCurrentTab] = useState<'lobby' | 'history' | 'analytics' | 'pricing'>('lobby');
+  const [currentTab, setCurrentTab] = useState<'lobby' | 'history' | 'analytics'>('lobby');
 
   // Session Flow
   const [sessionFlow, setSessionFlow] = useState<'idle' | 'matching' | 'in_call' | 'post_call'>('idle');
@@ -50,11 +47,9 @@ export default function App() {
   const [sessionDurationMinutes, setSessionDurationMinutes] = useState<number>(10);
 
   // Modals
-  const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isInstallOpen, setIsInstallOpen] = useState(false);
-  const [isPayoutsOpen, setIsPayoutsOpen] = useState(false);
   const [isPermanentlyBanned, setIsPermanentlyBanned] = useState(false);
 
   // Persist State Changes
@@ -70,30 +65,14 @@ export default function App() {
     saveVocab(vocab);
   }, [vocab]);
 
-  // Start Matching with Anyone Free
+  // Start Matching with Anyone Free (100% Free)
   const handleStartSpeaking = () => {
-    const isPassActive = user.unlimitedPassExpiresAt && user.unlimitedPassExpiresAt > Date.now();
-    const freeRemaining = Math.max(0, 15 - user.sessionsCompletedToday);
-
-    if (!isPassActive && freeRemaining <= 0) {
-      setIsPricingOpen(true);
-      return;
-    }
-
     setDirectMatchedPartner(null);
     setSessionFlow('matching');
   };
 
   // Connect Directly with Someone Free
   const handleConnectDirectWithPartner = (partner: Partner) => {
-    const isPassActive = user.unlimitedPassExpiresAt && user.unlimitedPassExpiresAt > Date.now();
-    const freeRemaining = Math.max(0, 15 - user.sessionsCompletedToday);
-
-    if (!isPassActive && freeRemaining <= 0) {
-      setIsPricingOpen(true);
-      return;
-    }
-
     setDirectMatchedPartner(partner);
     setSessionFlow('matching');
   };
@@ -170,21 +149,6 @@ export default function App() {
     setDirectMatchedPartner(null);
   };
 
-  // Activate Unlimited Pass
-  const handleActivatePass = (passType: PassType, days: number) => {
-    const additionalMs = days * 24 * 60 * 60 * 1000;
-    const currentExpiry =
-      user.unlimitedPassExpiresAt && user.unlimitedPassExpiresAt > Date.now()
-        ? user.unlimitedPassExpiresAt
-        : Date.now();
-
-    const updatedUser: UserProfile = {
-      ...user,
-      unlimitedPassExpiresAt: currentExpiry + additionalMs
-    };
-    setUser(updatedUser);
-  };
-
   // Toggle Favorite
   const handleToggleFavorite = (contactId: string) => {
     setContacts(
@@ -227,19 +191,12 @@ export default function App() {
       {/* Top Header Navigation */}
       <Header
         currentTab={currentTab}
-        onSelectTab={(tab) => {
-          if (tab === 'pricing') {
-            setIsPricingOpen(true);
-          } else {
-            setCurrentTab(tab);
-          }
-        }}
+        onSelectTab={(tab) => setCurrentTab(tab)}
         user={user}
         onOpenProfile={() => setIsProfileOpen(true)}
-        onOpenPricing={() => setIsPricingOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
         onStartSession={handleStartSpeaking}
         onOpenInstall={() => setIsInstallOpen(true)}
-        onOpenPayouts={() => setIsPayoutsOpen(true)}
       />
 
       {/* Main App Content */}
@@ -251,9 +208,8 @@ export default function App() {
             onSelectTopic={(t) => setSelectedTopic(t)}
             onStartMatching={handleStartSpeaking}
             onConnectDirectWithPartner={handleConnectDirectWithPartner}
-            onOpenPricing={() => setIsPricingOpen(true)}
             onOpenAuth={() => setIsAuthOpen(true)}
-            onOpenInstall={() => setIsInstallOpen(true)}
+            onOpenProfile={() => setIsProfileOpen(true)}
             onToggleUserAvailability={handleToggleUserAvailability}
           />
         )}
@@ -272,7 +228,6 @@ export default function App() {
             user={user}
             contacts={contacts}
             vocab={vocab}
-            onOpenPricing={() => setIsPricingOpen(true)}
           />
         )}
       </main>
@@ -312,20 +267,11 @@ export default function App() {
         />
       )}
 
-      {/* Unlimited Passes Modal */}
-      <PricingModal
-        isOpen={isPricingOpen}
-        onClose={() => setIsPricingOpen(false)}
-        user={user}
-        onActivatePass={handleActivatePass}
-        onOpenPayouts={() => setIsPayoutsOpen(true)}
-      />
-
-      {/* Global Auth Modal */}
+      {/* Dedicated Sign Up / Sign In Modal */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(updated) => setUser({ ...user, ...updated })}
+        onAuthSuccess={(updated) => setUser({ ...user, ...updated })}
       />
 
       {/* Profile Modal */}
@@ -334,12 +280,6 @@ export default function App() {
         onClose={() => setIsProfileOpen(false)}
         user={user}
         onSaveProfile={(updated) => setUser({ ...user, ...updated })}
-      />
-
-      {/* Payout & Revenue Settlement Modal */}
-      <PayoutSettingsModal
-        isOpen={isPayoutsOpen}
-        onClose={() => setIsPayoutsOpen(false)}
       />
 
       {/* Install Modal */}
@@ -372,7 +312,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-xs text-stone-500 max-w-sm">
-                One-on-one English speaking community. 15 free daily sessions of ten minutes each, with conversation questions and private room moderation.
+                100% free one-on-one English speaking community. Ten-minute calls with conversation topics and private room moderation.
               </p>
             </div>
 
@@ -396,16 +336,10 @@ export default function App() {
                 Performance Analytics
               </button>
               <button
-                onClick={() => setIsPricingOpen(true)}
-                className="hover:text-stone-900 transition-colors"
-              >
-                Unlimited Passes
-              </button>
-              <button
-                onClick={() => setIsPayoutsOpen(true)}
+                onClick={() => setIsAuthOpen(true)}
                 className="hover:text-stone-900 font-semibold transition-colors"
               >
-                Organizer Payouts
+                Sign Up / Sign In
               </button>
               <button
                 onClick={() => setIsInstallOpen(true)}
@@ -419,7 +353,7 @@ export default function App() {
           <div className="pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-400">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-stone-500" />
-              <span>One-on-one private call moderation and client-side data encryption.</span>
+              <span>One-on-one private call moderation. 100% Free for everyone worldwide.</span>
             </div>
             <span>Global community. All 195+ countries worldwide.</span>
           </div>
