@@ -1,0 +1,11 @@
+{
+  "name": "LinguaConnect - 1-on-1 English Speaking Platform",
+  "description": "Global 1-on-1 10-minute conversational English video sessions with 15 free daily chats, conversation topics, smart Detective safety moderation, and offline-synced interaction history.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
