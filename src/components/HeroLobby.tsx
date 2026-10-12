@@ -43,7 +43,7 @@ export const HeroLobby: React.FC<HeroLobbyProps> = ({
               </h1>
 
               <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-xl">
-                Every session is a private, ten-minute video call with a friendly partner. Free for everyone worldwide, with curated conversation questions so you always have something to say.
+                Every session is a private 10-minute video call. Speak with real global learners, or practice immediately with a warm, lifelike conversational partner who laughs, listens, and engages naturally for the full ten minutes.
               </p>
 
               {/* Action Buttons */}

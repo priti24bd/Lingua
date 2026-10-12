@@ -118,3 +118,30 @@ export function playSuccessChime(): void {
     // Ignore audio restriction
   }
 }
+
+export function playLaughterChime(): void {
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    // Cheerful bubbling notes (G4 -> C5 -> E5 -> G5)
+    [392.00, 523.25, 659.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+      
+      gain.gain.setValueAtTime(0, now + idx * 0.07);
+      gain.gain.linearRampToValueAtTime(0.08, now + idx * 0.07 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.3);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(now + idx * 0.07);
+      osc.stop(now + idx * 0.07 + 0.35);
+    });
+  } catch {
+    // Ignore audio restriction
+  }
+}
+
