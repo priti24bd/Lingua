@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Partner, ConversationTopic, UserProfile } from '../types';
 import { MOCK_PARTNERS } from '../data/mockPartners';
 import { CONVERSATION_TOPICS } from '../data/topics';
-import { ShieldCheck, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Copy, Check, Users, Smartphone } from 'lucide-react';
 
 interface MatchingLobbyProps {
   user: UserProfile;
   selectedTopic: ConversationTopic | null;
   directPartner?: Partner | null;
+  roomId?: string;
   onPartnerFound: (partner: Partner, topic: ConversationTopic) => void;
   onCancel: () => void;
 }
@@ -16,6 +17,7 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
   user,
   selectedTopic,
   directPartner,
+  roomId = 'LC-ROOM-701',
   onPartnerFound,
   onCancel
 }) => {
@@ -29,6 +31,9 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
     selectedTopic || CONVERSATION_TOPICS[0]
   );
   const [countdown, setCountdown] = useState<number>(3);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  const directJoinUrl = `${window.location.origin}?room=${roomId}`;
 
   useEffect(() => {
     if (directPartner) {
@@ -47,11 +52,11 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
 
     setActiveTopic(chosenTopic);
 
-    // Fast 1.5 second matching
+    // Fast matching so user is never stuck
     const matchTimer = setTimeout(() => {
       setMatchedPartner(chosenPartner);
       setMatchStep('found');
-    }, 1500);
+    }, 2000);
 
     return () => clearTimeout(matchTimer);
   }, [selectedTopic, directPartner]);
@@ -73,29 +78,54 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
     }
   }, [matchStep, matchedPartner, activeTopic, onPartnerFound]);
 
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(directJoinUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-sm">
       <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-stone-200">
         {matchStep === 'searching' && (
           <div className="p-8 text-center space-y-5">
-            <div className="w-16 h-16 rounded-full bg-stone-100 border border-stone-200 flex items-center justify-center mx-auto text-sm font-bold text-stone-800">
+            <div className="w-16 h-16 rounded-2xl bg-amber-600 text-white flex items-center justify-center mx-auto text-base font-bold shadow-md">
               LC
             </div>
 
             <div>
               <h2 className="text-xl font-bold text-stone-900">
-                Connecting with a Free Partner
+                Connecting with a Speaking Partner
               </h2>
               <p className="text-xs text-stone-600 mt-1">
-                Looking for learners who are available right now. Topic: {activeTopic.title}.
+                Matching available learners. Topic: <strong>{activeTopic.title}</strong>
               </p>
             </div>
 
-            <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-left space-y-1 text-xs text-stone-600">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-stone-700" />
-                <span>Checking camera connection and one-on-one room</span>
+            {/* Test on 2 devices banner */}
+            <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 text-left space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-stone-600" />
+                  <span>Connect a Real Person or Test on Phone:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="text-xs text-amber-700 hover:text-amber-800 font-semibold flex items-center gap-1"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Copied' : 'Copy Direct Link'}</span>
+                </button>
               </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                Open this copied link on your mobile phone or send to a friend to jump into the same live video call!
+              </p>
+            </div>
+
+            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-left text-xs text-stone-600 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-stone-700 shrink-0" />
+              <span>Camera check: One-on-one private call rules active</span>
             </div>
 
             <button
@@ -109,13 +139,13 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
 
         {matchStep === 'found' && matchedPartner && (
           <div className="p-8 text-center space-y-5">
-            <span className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1 rounded-full">
-              Partner Available
+            <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+              Partner Ready & Verified
             </span>
 
             {/* Found Partner Profile Card */}
             <div className="bg-stone-50 p-6 rounded-2xl border border-stone-200 space-y-3">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto border border-stone-300 shadow-sm">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto border-2 border-stone-300 shadow-md">
                 <img
                   src={matchedPartner.avatar}
                   alt={matchedPartner.name}
@@ -146,7 +176,7 @@ export const MatchingLobby: React.FC<MatchingLobbyProps> = ({
             <div className="space-y-2 pt-1">
               <button
                 onClick={() => onPartnerFound(matchedPartner, activeTopic)}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
                 <span>Enter Call ({countdown}s)</span>
                 <ArrowRight className="w-4 h-4" />

@@ -45,6 +45,26 @@ export default function App() {
   const [directMatchedPartner, setDirectMatchedPartner] = useState<Partner | null>(null);
   const [sessionNotes, setSessionNotes] = useState<string[]>([]);
   const [sessionDurationMinutes, setSessionDurationMinutes] = useState<number>(10);
+  const [currentRoomId, setCurrentRoomId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) return roomParam;
+    }
+    return `LC-${Math.floor(1000 + Math.random() * 9000)}`;
+  });
+
+  // Auto-join room if opened with ?room= parameter
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) {
+        setCurrentRoomId(roomParam);
+        setSessionFlow('matching');
+      }
+    }
+  }, []);
 
   // Modals
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -238,6 +258,7 @@ export default function App() {
           user={user}
           selectedTopic={selectedTopic}
           directPartner={directMatchedPartner}
+          roomId={currentRoomId}
           onPartnerFound={handlePartnerFound}
           onCancel={() => setSessionFlow('idle')}
         />
@@ -250,6 +271,7 @@ export default function App() {
             partner={activePartner}
             topic={activeTopic}
             user={user}
+            roomId={currentRoomId}
             onEndSession={handleEndCall}
             onTriggerPermanentBan={handleTriggerPermanentBan}
           />

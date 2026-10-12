@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Partner, ConversationTopic, ModerationWarningStage, UserProfile } from '../types';
+import { LiveVideoRenderer } from './LiveVideoRenderer';
+import { WebRTCManager } from '../utils/webrtc';
 import {
   playSessionStartChime,
   playWarningChime,
@@ -12,6 +14,8 @@ import {
   Video,
   VideoOff,
   PhoneOff,
+  Volume2,
+  VolumeX,
   Shield,
   ShieldAlert,
   Users,
@@ -19,13 +23,18 @@ import {
   Flag,
   BookOpen,
   Send,
-  ChevronRight
+  ChevronRight,
+  Share2,
+  Copy,
+  Check,
+  Radio
 } from 'lucide-react';
 
 interface VideoRoomProps {
   partner: Partner;
   topic: ConversationTopic;
   user: UserProfile;
+  roomId?: string;
   onEndSession: (notes: string[], durationMinutes: number) => void;
   onTriggerPermanentBan: () => void;
 }
@@ -34,6 +43,7 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
   partner,
   topic,
   user,
+  roomId = 'LC-ROOM-701',
   onEndSession,
   onTriggerPermanentBan
 }) => {
@@ -41,11 +51,17 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(600);
   const [isMicMuted, setIsMicMuted] = useState<boolean>(false);
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(false);
-  const [isBlurActive, setIsBlurActive] = useState<boolean>(false);
+  const [isPartnerVoiceMuted, setIsPartnerVoiceMuted] = useState<boolean>(false);
   const [activePromptIndex, setActivePromptIndex] = useState<number>(0);
   const [notes, setNotes] = useState<string[]>([]);
   const [noteInput, setNoteInput] = useState<string>('');
   const [showNotesDrawer, setShowNotesDrawer] = useState<boolean>(false);
+  const [copiedRoomLink, setCopiedRoomLink] = useState<boolean>(false);
+
+  // WebRTC Real Remote Stream State
+  const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
+  const [isRealPeerConnected, setIsRealPeerConnected] = useState<boolean>(false);
+  const webrtcManagerRef = useRef<WebRTCManager | null>(null);
 
   // Partner speech simulation
   const [partnerSpeechText, setPartnerSpeechText] = useState<string>(partner.greetings[0]);
@@ -57,34 +73,137 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
 
   // WebRTC User Video
   const userVideoRef = useRef<HTMLVideoElement>(null);
+  const userFallbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const [hasWebcamAccess, setHasWebcamAccess] = useState<boolean>(false);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Initialize camera and start chime
+  // Voice Speech Synthesis Helper
+  const speakText = (text: string) => {
+    if (isPartnerVoiceMuted || typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.lang = 'en-US';
+      utterance.onstart = () => setIsPartnerSpeaking(true);
+      utterance.onend = () => setIsPartnerSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // speech synthesis restricted
+    }
+  };
+
+  // Initialize WebRTC and Camera
   useEffect(() => {
     playSessionStartChime();
 
+    // Start WebRTC Manager
+    const rtc = new WebRTCManager(roomId, user.id, user.name);
+    webrtcManagerRef.current = rtc;
+
+    rtc.onRemoteStream((stream) => {
+      setRemoteMediaStream(stream);
+      setIsRealPeerConnected(true);
+    });
+
+    rtc.onConnectionStateChange((state) => {
+      if (state === 'connected') {
+        setIsRealPeerConnected(true);
+      } else if (state === 'disconnected' || state === 'failed') {
+        setIsRealPeerConnected(false);
+      }
+    });
+
+    // Request Camera & Mic
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
+        .getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true
+        })
         .then((stream) => {
           mediaStreamRef.current = stream;
           setHasWebcamAccess(true);
           if (userVideoRef.current) {
             userVideoRef.current.srcObject = stream;
+            userVideoRef.current.play().catch(() => {});
           }
+          rtc.setLocalStream(stream);
+          rtc.initConnection(true);
         })
         .catch(() => {
+          // Camera permission denied or not found -> fallback canvas active
           setHasWebcamAccess(false);
+          rtc.initConnection(true);
         });
     }
 
+    // Speak initial greeting
+    const greetingTimeout = setTimeout(() => {
+      speakText(partner.greetings[0]);
+    }, 1200);
+
     return () => {
+      clearTimeout(greetingTimeout);
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      rtc.destroy();
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [roomId, partner]);
+
+  // Fallback Camera Canvas Animation (if webcam permission is pending or blocked)
+  useEffect(() => {
+    if (hasWebcamAccess) return;
+
+    const canvas = userFallbackCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let frameId: number;
+    let count = 0;
+
+    const drawUserCamera = () => {
+      count++;
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Dark webcam background
+      ctx.fillStyle = '#292524';
+      ctx.fillRect(0, 0, w, h);
+
+      // Human avatar silhouette
+      ctx.fillStyle = '#44403c';
+      ctx.beginPath();
+      // Head
+      ctx.arc(w / 2, h * 0.4, 28, 0, Math.PI * 2);
+      ctx.fill();
+      // Shoulders
+      ctx.beginPath();
+      ctx.ellipse(w / 2, h * 0.85, 48, 30, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Audio activity wave
+      if (!isMicMuted) {
+        ctx.fillStyle = '#10b981';
+        for (let i = 0; i < 4; i++) {
+          const barH = Math.sin(count * 0.2 + i) * 6 + 4;
+          ctx.fillRect(w - 24 + i * 5, h - 14 - barH, 3, barH);
+        }
+      }
+
+      frameId = requestAnimationFrame(drawUserCamera);
+    };
+
+    drawUserCamera();
+    return () => cancelAnimationFrame(frameId);
+  }, [hasWebcamAccess, isMicMuted]);
 
   // Timer countdown
   useEffect(() => {
@@ -108,23 +227,19 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
     return () => clearInterval(timer);
   }, [notes, onEndSession]);
 
-  // Periodic partner conversational responses
+  // Conversational prompts loop
   useEffect(() => {
     const interval = setInterval(() => {
+      if (isRealPeerConnected) return; // real human talking
+
       const responses = partner.conversationResponses;
       const nextText = responses[Math.floor(Math.random() * responses.length)];
       setPartnerSpeechText(nextText);
-      setIsPartnerSpeaking(true);
-
-      const timeout = setTimeout(() => {
-        setIsPartnerSpeaking(false);
-      }, 7000);
-
-      return () => clearTimeout(timeout);
-    }, 22000);
+      speakText(nextText);
+    }, 24000);
 
     return () => clearInterval(interval);
-  }, [partner]);
+  }, [partner, isRealPeerConnected, isPartnerVoiceMuted]);
 
   const toggleMic = () => {
     setIsMicMuted((prev) => {
@@ -148,7 +263,7 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
     });
   };
 
-  // Crowd Detection Simulation
+  // Crowd Notice
   const triggerMultiPersonNotice = () => {
     playDetectiveAlertSound();
     setModerationStage('warning_1_crowded');
@@ -182,13 +297,19 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
     }
   };
 
+  const handleCopyDirectRoomLink = () => {
+    const directUrl = `${window.location.origin}?room=${roomId}`;
+    navigator.clipboard.writeText(directUrl);
+    setCopiedRoomLink(true);
+    setTimeout(() => setCopiedRoomLink(false), 2000);
+  };
+
   const handleAddNote = () => {
     if (!noteInput.trim()) return;
     setNotes([...notes, noteInput.trim()]);
     setNoteInput('');
   };
 
-  // Format MM:SS
   const minutes = Math.floor(secondsRemaining / 60);
   const seconds = secondsRemaining % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -199,9 +320,16 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
       <div className="h-14 bg-stone-900 border-b border-stone-800 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-white leading-tight">
-              {partner.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-white leading-tight">
+                {isRealPeerConnected ? 'Real Live Peer Connected' : partner.name}
+              </span>
+              {isRealPeerConnected && (
+                <span className="text-[10px] bg-emerald-900 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
+                  P2P Active
+                </span>
+              )}
+            </div>
             <span className="text-[11px] text-stone-400">
               {partner.country} · {partner.englishLevel} · {partner.localTime}
             </span>
@@ -210,7 +338,7 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
 
         {/* 10-Minute Countdown Clock */}
         <div className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-lg border border-stone-700">
-          <span className="text-xs text-stone-400 font-medium">Session Timer:</span>
+          <span className="text-xs text-stone-400 font-medium">Session:</span>
           <span
             className={`font-mono text-sm sm:text-base font-bold tabular-nums ${
               secondsRemaining <= 60
@@ -224,12 +352,19 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
           </span>
         </div>
 
-        {/* Notes & Moderation Status */}
+        {/* Direct Link Share & Notes */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-stone-800 text-[11px] font-medium text-stone-300 rounded-lg border border-stone-700">
-            <Shield className="w-3.5 h-3.5 text-stone-400" />
-            <span>1-on-1 Moderation Active</span>
-          </div>
+          {/* Direct Link button so user can open on phone/laptop to test real 2-person call! */}
+          <button
+            onClick={handleCopyDirectRoomLink}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium border border-stone-700 transition-colors"
+            title="Copy call link to connect another person or phone"
+          >
+            {copiedRoomLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">
+              {copiedRoomLink ? 'Link Copied!' : 'Invite Another Device / Friend'}
+            </span>
+          </button>
 
           <button
             onClick={() => setShowNotesDrawer(!showNotesDrawer)}
@@ -247,63 +382,77 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
 
       {/* Main Video Call Area */}
       <div className="flex-1 relative flex overflow-hidden">
-        {/* Partner Large Video Canvas */}
+        {/* Partner Large Live Video Canvas */}
         <div className="flex-1 relative bg-stone-900 flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0">
-            <img
-              src={partner.avatar}
-              alt={partner.name}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/20 to-stone-950/30" />
-          </div>
+          <LiveVideoRenderer
+            partner={partner}
+            remoteMediaStream={remoteMediaStream}
+            isSpeaking={isPartnerSpeaking}
+            isMuted={isPartnerVoiceMuted}
+          />
 
-          {/* Partner Speaking Subtitle Banner */}
-          <div className="absolute bottom-20 left-4 right-4 sm:left-8 sm:right-auto sm:max-w-xl z-10">
-            <div className="bg-stone-900/90 backdrop-blur-md p-3.5 rounded-xl border border-stone-700 shadow-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-semibold text-stone-200">
-                  {partner.name} ({partner.country})
-                </span>
-                <span className="text-[10px] text-stone-400">· {partner.accent}</span>
+          {/* Partner Live Subtitle Banner */}
+          {!isRealPeerConnected && (
+            <div className="absolute bottom-20 left-4 right-4 sm:left-8 sm:right-auto sm:max-w-xl z-10">
+              <div className="bg-stone-900/90 backdrop-blur-md p-3.5 rounded-xl border border-stone-700 shadow-lg">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-semibold text-stone-200">
+                      {partner.name} ({partner.country})
+                    </span>
+                    <span className="text-[10px] text-stone-400">· {partner.accent}</span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setIsPartnerVoiceMuted(!isPartnerVoiceMuted);
+                      if (typeof window !== 'undefined' && window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                      }
+                    }}
+                    className="text-stone-400 hover:text-white p-1 rounded"
+                    title={isPartnerVoiceMuted ? 'Unmute Partner Voice' : 'Mute Partner Voice'}
+                  >
+                    {isPartnerVoiceMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-xs sm:text-sm text-stone-100 leading-relaxed">
+                  "{partnerSpeechText}"
+                </p>
               </div>
-              <p className="text-xs sm:text-sm text-stone-100 leading-relaxed">
-                "{partnerSpeechText}"
-              </p>
             </div>
-          </div>
+          )}
 
           {/* User Self Video (Picture in Picture) */}
-          <div
-            className={`absolute top-4 right-4 w-36 sm:w-56 h-28 sm:h-40 rounded-xl overflow-hidden shadow-xl border border-stone-700 bg-stone-900 z-20 ${
-              isBlurActive ? 'backdrop-blur-xl' : ''
-            }`}
-          >
+          <div className="absolute top-4 right-4 w-36 sm:w-56 h-28 sm:h-40 rounded-xl overflow-hidden shadow-2xl border border-stone-700 bg-stone-900 z-20">
             {hasWebcamAccess && !isVideoMuted ? (
               <video
                 ref={userVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover -scale-x-100 ${
-                  isBlurActive ? 'filter blur-sm' : ''
-                }`}
+                className="w-full h-full object-cover -scale-x-100"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-stone-800 text-stone-300 p-2 text-center">
-                <span className="text-xs font-semibold text-stone-200 truncate max-w-full">
-                  {user.name}
-                </span>
-                <span className="text-[10px] text-stone-400">
-                  {isVideoMuted ? 'Camera Off' : 'Your Video Feed'}
-                </span>
-              </div>
+              <canvas
+                ref={userFallbackCanvasRef}
+                width={320}
+                height={240}
+                className="w-full h-full object-cover"
+              />
             )}
-            <div className="absolute bottom-1.5 left-2 flex items-center gap-1 text-[10px] bg-stone-950/80 px-1.5 py-0.5 rounded text-stone-200">
-              <span>You ({user.countryCode})</span>
+
+            <div className="absolute bottom-1.5 left-2 flex items-center gap-1.5 text-[10px] bg-stone-950/85 px-2 py-0.5 rounded text-stone-200">
+              <span className="font-semibold">{user.name.split(' ')[0]} (You)</span>
               {isMicMuted && <MicOff className="w-2.5 h-2.5 text-rose-400" />}
             </div>
+
+            {!hasWebcamAccess && (
+              <div className="absolute top-2 left-2 bg-stone-900/90 text-[9px] text-amber-300 px-1.5 py-0.5 rounded border border-amber-900/40">
+                Camera Mode
+              </div>
+            )}
           </div>
 
           {/* Conversation Question Banner */}
@@ -355,7 +504,7 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
             <div className="flex-1 overflow-y-auto py-3 space-y-2">
               {notes.length === 0 ? (
                 <div className="text-center py-6 text-stone-500 text-xs">
-                  Take notes during the call. Saved automatically when the session finishes.
+                  Type words and expressions here. Saved to your interaction history.
                 </div>
               ) : (
                 notes.map((n, i) => (
@@ -397,28 +546,28 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
 
       {/* Bottom Session Toolbar Controls */}
       <div className="h-16 bg-stone-900 border-t border-stone-800 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20">
-        {/* Left: Moderation testing actions */}
+        {/* Left: Test Moderation Controls */}
         <div className="flex items-center gap-2">
           <button
             onClick={triggerMultiPersonNotice}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-[11px] font-medium text-stone-300 rounded-lg border border-stone-700 transition-colors"
-            title="Simulate multi-person detection sequence"
+            title="Test crowded frame notice"
           >
             <Users className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Test Crowded Notice</span>
+            <span className="hidden sm:inline">Test Crowd Rule</span>
           </button>
 
           <button
             onClick={triggerHarshWordsViolation}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-[11px] font-medium text-rose-300 rounded-lg border border-rose-900/40 transition-colors"
-            title="Report violation / test conduct ban"
+            title="Report conduct"
           >
             <Flag className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Report Conduct</span>
           </button>
         </div>
 
-        {/* Center: Essential Controls */}
+        {/* Center: Real Video Call Controls */}
         <div className="flex items-center gap-3">
           <button
             onClick={toggleMic}
@@ -445,22 +594,11 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
           </button>
 
           <button
-            onClick={() => setIsBlurActive(!isBlurActive)}
-            className={`hidden sm:flex px-3 py-2 rounded-xl transition-colors text-xs font-semibold ${
-              isBlurActive
-                ? 'bg-stone-700 text-white'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
-            }`}
-          >
-            Blur
-          </button>
-
-          <button
             onClick={() => {
               const elapsedMinutes = Math.max(1, Math.ceil((600 - secondsRemaining) / 60));
               onEndSession(notes, elapsedMinutes);
             }}
-            className="p-3 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition-colors"
+            className="p-3 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition-colors shadow"
             title="End Call"
           >
             <PhoneOff className="w-5 h-5" />
@@ -511,10 +649,10 @@ export const VideoRoom: React.FC<VideoRoomProps> = ({
             <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
             <div className="flex-1">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-1">
-                Final Notice: Call Will End
+                Final Notice: Call Will End in 10s
               </h4>
               <p className="text-xs text-stone-300 leading-relaxed mb-3">
-                Multiple individuals remain on camera. The call will automatically disconnect in ten seconds unless single-person frame is confirmed.
+                Multiple individuals remain on camera. The call will automatically disconnect unless single-person frame is confirmed.
               </p>
               <button
                 onClick={dismissCrowdWarning}
